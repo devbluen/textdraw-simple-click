@@ -1,10 +1,17 @@
-
-            // Macro
+// Macro
 #define PlayerTextDrawClick:%0(%1) \
     forward txdclk_%0(%1); public txdclk_%0(%1)
 
 #define PlayerTextDrawCreateClick(%0,%1, \
 	PlayerTextDrawSetClick(%0, #%1,
+
+#if !defined MAX_PLAYER_TEXT_DRAWS
+    #define MAX_PLAYER_TEXT_DRAWS (256)
+#endif
+
+#if !defined INVALID_TEXT_DRAW
+    #define INVALID_TEXT_DRAW (PlayerText:-1)
+#endif
 
             // Includes
 #include <YSI_Coding\y_hooks>
@@ -142,3 +149,95 @@ stock alias_PlayerTextDrawDestroy(playerid, PlayerText:playertextid) {
 #endif
  
 #define PlayerTextDrawDestroy alias_PlayerTextDrawDestroy
+
+
+
+stock PlayerTextDrawClone(playerid, PlayerText:sourceid, Float:x = 0.0, Float:y = 0.0) {
+    if(!IsValidPlayerTextDrawSimple(playerid, sourceid))
+        return INVALID_TEXT_DRAW;
+    
+    new text[128];
+    PlayerTextDrawGetString(playerid, sourceid, text, sizeof(text));
+    
+    new PlayerText:newid = CreatePlayerTextDraw(playerid, 
+        (x == 0.0) ? PlayerTextDrawGetX(playerid, sourceid) : x,
+        (y == 0.0) ? PlayerTextDrawGetY(playerid, sourceid) : y,
+        text
+    );
+    
+    if(newid == INVALID_TEXT_DRAW)
+        return INVALID_TEXT_DRAW;
+
+    PlayerTextDrawSetSelectable(playerid, newid, PlayerTextDrawIsSelectable(playerid, sourceid));
+    PlayerTextDrawColor(playerid, newid, PlayerTextDrawGetColor(playerid, sourceid));
+    PlayerTextDrawBackgroundColor(playerid, newid, PlayerTextDrawGetBGColor(playerid, sourceid));
+    PlayerTextDrawBoxColor(playerid, newid, PlayerTextDrawGetBoxColor(playerid, sourceid));
+    PlayerTextDrawAlignment(playerid, newid, PlayerTextDrawGetAlignment(playerid, sourceid));
+    PlayerTextDrawFont(playerid, newid, PlayerTextDrawGetFont(playerid, sourceid));
+    PlayerTextDrawLetterSize(playerid, newid, PlayerTextDrawGetLetterSizeX(playerid, sourceid), PlayerTextDrawGetLetterSizeY(playerid, sourceid));
+    PlayerTextDrawTextSize(playerid, newid, PlayerTextDrawGetTextSizeX(playerid, sourceid), PlayerTextDrawGetTextSizeY(playerid, sourceid));
+    PlayerTextDrawSetOutline(playerid, newid, PlayerTextDrawGetOutline(playerid, sourceid));
+    PlayerTextDrawSetShadow(playerid, newid, PlayerTextDrawGetShadow(playerid, sourceid));
+    PlayerTextDrawSetProportional(playerid, newid, PlayerTextDrawIsProportional(playerid, sourceid));
+    
+    // Clone click handler if exists
+    if(!isnull(e_TextdrawData[playerid][sourceid][E_TEXTDRAW_DATA_CALLBACK])) {
+        PlayerTextDrawSetClick(playerid, 
+            e_TextdrawData[playerid][sourceid][E_TEXTDRAW_DATA_CALLBACK], 
+            newid, 
+            e_TextdrawData[playerid][sourceid][E_TEXTDRAW_DATA_PARAMS]
+        );
+    }
+    
+    return newid;
+}
+
+stock PlayerTextDrawMoveToPosition(playerid, PlayerText:playertextid, Float:x, Float:y, Float:speed = 1.0) {
+    if(!IsValidPlayerTextDrawSimple(playerid, playertextid))
+        return 0;
+    
+    new Float:currentX = PlayerTextDrawGetX(playerid, playertextid);
+    new Float:currentY = PlayerTextDrawGetY(playerid, playertextid);
+    
+    // Calculate distance and steps
+    new Float:distanceX = x - currentX;
+    new Float:distanceY = y - currentY;
+    new Float:steps = floatsqroot(distanceX * distanceX + distanceY * distanceY) / speed;
+    
+    if(steps < 1.0) steps = 1.0;
+    
+    // Calculate movement per step
+    new Float:moveX = distanceX / steps;
+    new Float:moveY = distanceY / steps;
+    
+    // Move TextDraw
+    for(new Float:i = 0.0; i < steps; i++) {
+        currentX += moveX;
+        currentY += moveY;
+        PlayerTextDrawDestroy(playerid, playertextid);
+        playertextid = PlayerTextDrawClone(playerid, playertextid, currentX, currentY);
+        PlayerTextDrawShow(playerid, playertextid);
+    }
+    
+    return 1;
+}
+
+stock PlayerTextDrawSetPosition(playerid, PlayerText:playertextid, Float:x, Float:y) {
+    if(!IsValidPlayerTextDrawSimple(playerid, playertextid))
+        return 0;
+    
+    new PlayerText:newid = PlayerTextDrawClone(playerid, playertextid, x, y);
+    if(newid == INVALID_TEXT_DRAW)
+        return 0;
+    
+    PlayerTextDrawDestroy(playerid, playertextid);
+    return _:newid;
+}
+
+stock PlayerTextDrawGetClickCount(playerid, PlayerText:playertextid) {
+    if(!IsValidPlayerTextDrawSimple(playerid, playertextid))
+        return 0;
+    
+    static click_count[MAX_PLAYERS][PlayerText:MAX_PLAYER_TEXT_DRAWS];
+    return click_count[playerid][playertextid];
+}
